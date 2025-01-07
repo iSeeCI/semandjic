@@ -1,0 +1,64 @@
+{% if node %}
+<ul class="list-none pl-4 border-l-2 border-gray-200">
+  {% if node.circular_ref %}
+  <li class="text-gray-500 italic">
+    Circular reference to {{ node.type }} #{{ node.id }}
+  </li>
+  {% else %}
+  <li class="mb-4">
+    <div class="font-semibold text-gray-800">
+      {{ node.type }} #{{ node.id }}
+      <!-- Add a link to the object tree page for this object, including the app name and model type -->
+      <a href="{% url 'semandjic:object-tree' model_class=node.type pk=node.id %}" class="text-blue-500 hover:text-blue-700 ml-2">
+        View Object Tree
+      </a>
+    </div>
+
+    {% if node.fields %}
+    <div class="bg-gray-50 p-2 rounded mt-2">
+      {% for key, value in node.fields.items %}
+      <div class="text-sm">
+        <span class="text-gray-600">{{ key }}:</span>
+        <span class="ml-2">{{ value|default:"—" }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if node.forward_relations %}
+    <div class="mt-2">
+      <div class="text-sm font-medium text-gray-600">Forward Relations:</div>
+      {% for rel_name, rel_data in node.forward_relations.items %}
+      <div class="mt-1">
+        <div class="text-sm text-gray-500">{{ rel_name }}:</div>
+        {% if rel_data %}
+        {% if rel_data.items %}
+        {% include "semandjic/tree_node.html" with node=rel_data %}
+        {% else %}
+        {% for item in rel_data %}
+        {% include "semandjic/tree_node.html" with node=item %}
+        {% endfor %}
+        {% endif %}
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if node.backward_relations %}
+    <div class="mt-2">
+      <div class="text-sm font-medium text-gray-600">Backward Relations:</div>
+      {% for rel_name, rel_data in node.backward_relations.items %}
+      <div class="mt-1">
+        <div class="text-sm text-gray-500">{{ rel_name }}:</div>
+        {% for item in rel_data %}
+        {% include "semandjic/tree_node.html" with node=item %}
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </li>
+  {% endif %}
+</ul>
+{% endif %}

@@ -1,0 +1,18 @@
+{% for prefix, children in forms.items %}
+<div class="form-section" data-prefix="{{ prefix }}">
+  <h3 class="section-header" onclick="toggleSection('{{ prefix }}')">
+    <span id="{{ prefix }}_arrow" class="section-arrow">▼</span>
+    {{ prefix|title }}
+  </h3>
+
+  <div id="{{ prefix }}_section" class="section-content">
+    {% if children.form %}
+    {{ children.form.as_p }}
+    {% endif %}
+
+    {% if children.children %}
+    {% include "semandjic/recursive_form.html" with forms=children.children only %}
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
