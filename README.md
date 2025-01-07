@@ -33,28 +33,46 @@ INSTALLED_APPS = [
 
 ```python
 SEMANDJIC = {
-    'APP_LABEL': 'myapp',
     'FIELDS_TO_EXCLUDE': {'id', 'modified_at'},
     'MAX_DEPTH': 5,
     'MAX_RELATED_OBJECTS': 10,
 }
 ```
 
-3. Use in your views:
+3. Use the methods directly from the classes and write your own semantic data flows:
 
 ```python
-from django.urls import path
 from semandjic.forms import NestedForms
-from semandjic.views import ObjectTreeView
 
 # Generate forms
 classmap = NestedForms.build_classmap_from_prefix_and_model_class(
-    prefix='person',
+    prefix='someone',
     model_class='myapp.Person'
 )
+
 forms = NestedForms.get_nested_forms_from_classmap(classmap)
 
-# Or use the tree view
+# Persist forms
+
+forms, valid, objs = NestedForms.persist_nested_forms_and_objs(
+    classmap,
+    request.POST
+)
+if valid:
+    for obj in objs:
+        obj.save()
+```
+
+Also check for `test_default_data_workflow` in [test_forms.py](./semandjic/tests/test_forms.py) to see the simplicity of the API from schema to forms to related instances in a SQL Database using your own Applications Ontologies (models).
+
+4. Use the included urls and views
+```python
+from django.urls import path
+
+# including them
+path('core/', include('semandjic.urls')),
+
+# using them as you please
 path('object/<str:model_class>/<int:pk>/', 
      ObjectTreeView.as_view(), 
      name='object-tree'),
