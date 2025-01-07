@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="semandjic",
-    version="0.1.0-rc",
+    version="0.1.0",
     author="Andres Fernandez",
     author_email="andres.fernandez@iseeci.com",
     description="A Django app for semantic model relationships and nested forms",
