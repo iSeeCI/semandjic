@@ -9,8 +9,8 @@ on:
         default: 'testpypi'
         type: choice
         options:
-        - testpypi
-        - pypi
+          - testpypi
+          - pypi
   push:
     branches:
       - 'release/v*'
@@ -31,19 +31,28 @@ jobs:
        startsWith(github.head_ref, 'release/v'))
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'
-          
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          # Install build and twine for package management
           pip install build twine
-          
+          # Install any additional dependencies your package needs for testing
+          pip install -e ".[test]"
+
       - name: Build package
         run: python -m build
+
+      # New testing step added here
+      - name: Run tests
+        run: |
+          python runtests.py -v
+        # If tests fail, this step will exit with non-zero status and stop the workflow
 
       - name: Set registry URL
         id: registry
@@ -63,7 +72,7 @@ jobs:
             echo "url=testpypi" >> $GITHUB_OUTPUT
             echo "token=${{ secrets.TEST_PYPI_API_TOKEN }}" >> $GITHUB_OUTPUT
           fi
-        
+
       - name: Publish package
         env:
           TWINE_USERNAME: __token__
