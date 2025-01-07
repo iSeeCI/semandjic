@@ -71,7 +71,7 @@ jobs:
           REGISTRY_URL: ${{ steps.registry.outputs.url }}
         run: |
           if [ "$REGISTRY_URL" = "testpypi" ]; then
-            twine upload --repository testpypi dist/*
+            twine upload --verbose --repository testpypi dist/*
           else
             twine upload dist/*
           fi
