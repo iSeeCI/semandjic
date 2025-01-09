@@ -19,7 +19,7 @@ SEMANDJIC_DEFAULTS = {
     },
     'ENTITY_SEPARATOR': '__',
     'MAX_DEPTH': 10,
-    'MAX_RELATED_OBJECTS': 5
+    'MAX_RELATED_OBJECTS': 10
 }
 
 class SemandjicSettings:
