@@ -44,3 +44,9 @@ class Person(models.Model):
             return 0
         today = datetime.now()
         return today.year - self.birth_date.year - ((today.month, today.day) < (self.birth_date.month, self.birth_date.day))
+
+class Contact(models.Model):
+    person = models.ForeignKey(Person, related_name='contacts', on_delete=models.CASCADE)
+    contact_type = models.CharField(max_length=50, default="default")
+    value = models.CharField(max_length=100, default="default_value")
+    is_primary = models.BooleanField(default=False)
