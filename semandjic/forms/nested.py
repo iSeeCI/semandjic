@@ -113,16 +113,42 @@ class NestedForms:
                 'fields': fields,
                 'exclude': exc_fields + calc_fields,
                 'widgets': widgets,
+                'formfield_callback': None if default_data else formfield_for_dbfield
             }
-
-            if not default_data:
-                factory_kwargs['formfield_callback'] = formfield_for_dbfield
 
             return forms.modelform_factory(**factory_kwargs)
 
         except KeyError as e:
             logger.error(f"Invalid participant in classmap: {e}")
             raise ValueError(f"Participant {participant} not found in classmap")
+
+    @classmethod
+    def get_custom_form_from_instance(
+            cls,
+            classmap: Dict[str, Tuple[str, List[str]]],
+            instance: models.Model
+    ) -> Dict[str, ModelForm]:
+        """
+        Generate forms from an existing model instance using the classmap structure.
+
+        Args:
+            classmap: Dictionary mapping prefixes to (model_class, fields) tuples
+            instance: Model instance to generate forms from
+
+        Returns:
+            Dictionary mapping prefixes to instantiated ModelForms
+        """
+        logger.info("Getting custom forms from instance")
+        logger.info(f"Classmap: {classmap}")
+        logger.info(f"Instance: {instance}")
+
+        forms = {}
+        for participant in reversed(classmap.keys()):
+            form_class = cls.get_custom_form_from_classmap(classmap, participant, default_data=False)
+            recursive_instance = cls.get_recursive_instance(instance, participant)
+            forms[participant] = form_class(instance=recursive_instance, prefix=participant)
+
+        return forms
 
     @classmethod
     def persist_nested_forms_and_objs(
@@ -323,10 +349,12 @@ class NestedForms:
                     queryset.update(**existing_defaults)
                 instance = queryset.get()
             else:
+                logger.error(f"No search dict. Always creating.")
                 instance = instance.__class__(**var_dict)
 
             return instance
-        except ObjectDoesNotExist:
+        except ObjectDoesNotExist as e:
+            logger.error(f"Error in get_existing_or_create: {e}")
             return instance.__class__(**var_dict)
         except Exception as e:
             logger.error(f"Error in get_existing_or_create: {e}")
