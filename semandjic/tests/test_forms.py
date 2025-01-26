@@ -11,6 +11,8 @@ from .models import Person, Address
 from ..forms.nested import NestedForms
 from ..utils import get_model_unique_fields, clean_model_dict, get_model_calculated_fields, get_model_field_dict
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class TestNestedForms(TransactionTestCase):
     databases = ["default"]
