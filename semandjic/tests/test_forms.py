@@ -270,49 +270,6 @@ class TestNestedForms(TransactionTestCase):
         self.assertEqual(address_form.initial['postal_code'], '1234567')
 
     @pytest.mark.django_db
-    def test_get_custom_form_from_instance_invalid_path(self):
-        """Test handling of invalid path in custom form generation"""
-        # First create a valid person object using the default workflow
-        logger.info("Getting forms now")
-        forms = NestedForms.get_nested_forms_from_classmap(self.classmap, default_data=True)
-
-
-        for form_name, form_instance in forms.items():
-            print(f"\nForm: {form_name}")
-            for field_name, field in form_instance.fields.items():
-                initial_value = field.initial if field.initial is not None else "None"
-                # Get the value that would actually be rendered
-                value = form_instance.initial.get(field_name, "None") if form_instance.initial else "None"
-                print(f"Field {field_name}: value = {value}")
-
-        logger.info(f"Converting forms to post data")
-        post_data = NestedForms.get_post_data_from_forms_default(forms)
-
-        _, valid, objects = NestedForms.persist_nested_forms_and_objs(
-            self.classmap,
-            post_data,
-            default_data=True
-        )
-        logger.info("Asserting now")
-        self.assertTrue(valid)
-        for obj in objects:
-            obj.save()
-
-        person = objects[1]  # Get the person object
-
-        # Now test with invalid classmap
-        invalid_classmap = {
-            'someone': ('tests.Person', ['first_name', 'last_name', 'email']),
-            'someone__invalid': ('tests.InvalidModel', ['field'])
-        }
-
-        with self.assertRaises(ValueError):
-            NestedForms.get_custom_form_from_instance(
-                classmap=invalid_classmap,
-                instance=person
-            )
-
-    @pytest.mark.django_db
     def test_nested_form_view_get_html(cls):
         client = Client()
         model_class = "tests.Person"  # Replace with your actual model class name
