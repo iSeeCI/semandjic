@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from unittest.mock import patch
 
@@ -222,12 +223,12 @@ class TestNestedForms(TransactionTestCase):
         post_data.update({
             'someone-first_name': 'John',
             'someone-last_name': 'Doe',
-            'someone-email': 'john@example.co',
+            'someone-email': 'john@example.cu',
             'someone-birth_date': '1990-01-01',
-            'someone__address-street': '123 Test St',
+            'someone__address-street': '123 Test St 1 for',
             'someone__address-city': 'Test City',
             'someone__address-state': 'Test State',
-            'someone__address-postal_code': '12345',
+            'someone__address-postal_code': '1234567',
             'someone__address-country': 'Test Country',
             'upsert': 'overwrite'
         })
@@ -260,26 +261,39 @@ class TestNestedForms(TransactionTestCase):
         self.assertEqual(person_form.prefix, 'someone')
         self.assertEqual(person_form.initial['first_name'], 'John')
         self.assertEqual(person_form.initial['last_name'], 'Doe')
-        self.assertEqual(person_form.initial['email'], 'john@example.com')
+        self.assertEqual(person_form.initial['email'], 'john@example.cu')
 
         address_form = generated_forms['someone__address']
         self.assertEqual(address_form.prefix, 'someone__address')
-        self.assertEqual(address_form.initial['street'], '123 Test St')
+        self.assertEqual(address_form.initial['street'], '123 Test St 1 for')
         self.assertEqual(address_form.initial['city'], 'Test City')
-        self.assertEqual(address_form.initial['postal_code'], '12345')
+        self.assertEqual(address_form.initial['postal_code'], '1234567')
 
     @pytest.mark.django_db
     def test_get_custom_form_from_instance_invalid_path(self):
         """Test handling of invalid path in custom form generation"""
         # First create a valid person object using the default workflow
+        logger.info("Getting forms now")
         forms = NestedForms.get_nested_forms_from_classmap(self.classmap, default_data=True)
+
+
+        for form_name, form_instance in forms.items():
+            print(f"\nForm: {form_name}")
+            for field_name, field in form_instance.fields.items():
+                initial_value = field.initial if field.initial is not None else "None"
+                # Get the value that would actually be rendered
+                value = form_instance.initial.get(field_name, "None") if form_instance.initial else "None"
+                print(f"Field {field_name}: value = {value}")
+
+        logger.info(f"Converting forms to post data")
         post_data = NestedForms.get_post_data_from_forms_default(forms)
+
         _, valid, objects = NestedForms.persist_nested_forms_and_objs(
             self.classmap,
             post_data,
             default_data=True
         )
-
+        logger.info("Asserting now")
         self.assertTrue(valid)
         for obj in objects:
             obj.save()
