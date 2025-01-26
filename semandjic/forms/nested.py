@@ -113,10 +113,8 @@ class NestedForms:
                 'fields': fields,
                 'exclude': exc_fields + calc_fields,
                 'widgets': widgets,
+                'formfield_callback': None if default_data else formfield_for_dbfield
             }
-
-            if not default_data:
-                factory_kwargs['formfield_callback'] = formfield_for_dbfield
 
             return forms.modelform_factory(**factory_kwargs)
 
@@ -355,7 +353,7 @@ class NestedForms:
                 instance = instance.__class__(**var_dict)
 
             return instance
-        except ObjectDoesNotExist:
+        except ObjectDoesNotExist as e:
             logger.error(f"Error in get_existing_or_create: {e}")
             return instance.__class__(**var_dict)
         except Exception as e:
