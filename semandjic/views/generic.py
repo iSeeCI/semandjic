@@ -29,7 +29,7 @@ class NestedFormView(View):
             last_object = objs[-1]  # Get the last object
             model_name = f"{last_object._meta.app_label}.{last_object.__class__.__name__}"  # Get the model name in lowercase (or you can adjust it if needed)
             object_id = last_object.pk  # Get the primary key (ID) of the last object
-            return redirect('object-tree', model_class=model_name, pk=object_id)
+            return redirect('semandjic:object-tree', model_class=model_name, pk=object_id)
         else:
             return render(request, self.template_name, {'forms': form_tree})
 

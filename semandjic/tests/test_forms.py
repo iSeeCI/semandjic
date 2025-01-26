@@ -208,6 +208,94 @@ class TestNestedForms(TransactionTestCase):
             obj.save()
             self.assertTrue(obj.pk)  # Verify objects were saved
 
+    def test_get_custom_form_from_instance(self):
+        """Test generation of custom forms from an existing instance"""
+        # First create forms with default data
+        forms = NestedForms.get_nested_forms_from_classmap(self.classmap, default_data=True, )
+
+        # Get post data with defaults
+        post_data = NestedForms.get_post_data_from_forms_default(forms)
+
+        # Add our test data to post_data
+        post_data.update({
+            'someone-first_name': 'John',
+            'someone-last_name': 'Doe',
+            'someone-email': 'john@example.co',
+            'someone-birth_date': '1990-01-01',
+            'someone__address-street': '123 Test St',
+            'someone__address-city': 'Test City',
+            'someone__address-state': 'Test State',
+            'someone__address-postal_code': '12345',
+            'someone__address-country': 'Test Country',
+            'upsert': 'overwrite'
+        })
+
+        # Create the objects using their workflow
+        forms, valid, objects = NestedForms.persist_nested_forms_and_objs(
+            self.classmap,
+            post_data,
+            default_data=True
+        )
+
+        self.assertTrue(valid)
+        for obj in objects:
+            obj.save()
+            self.assertTrue(obj.pk)  # Verify objects were saved
+
+        # Now test get_custom_form_from_instance with the created person
+        person = objects[1]  # Person should be second object due to reverse order creation
+        generated_forms = NestedForms.get_custom_form_from_instance(
+            classmap=self.classmap,
+            instance=person
+        )
+
+        # Verify forms structure
+        self.assertTrue(all(isinstance(form, ModelForm) for form in generated_forms.values()))
+        self.assertEqual(len(generated_forms), len(self.classmap))
+
+        # Check form prefixes and data
+        person_form = generated_forms['someone']
+        self.assertEqual(person_form.prefix, 'someone')
+        self.assertEqual(person_form.initial['first_name'], 'John')
+        self.assertEqual(person_form.initial['last_name'], 'Doe')
+        self.assertEqual(person_form.initial['email'], 'john@example.com')
+
+        address_form = generated_forms['someone__address']
+        self.assertEqual(address_form.prefix, 'someone__address')
+        self.assertEqual(address_form.initial['street'], '123 Test St')
+        self.assertEqual(address_form.initial['city'], 'Test City')
+        self.assertEqual(address_form.initial['postal_code'], '12345')
+
+    @pytest.mark.django_db
+    def test_get_custom_form_from_instance_invalid_path(self):
+        """Test handling of invalid path in custom form generation"""
+        # First create a valid person object using the default workflow
+        forms = NestedForms.get_nested_forms_from_classmap(self.classmap, default_data=True)
+        post_data = NestedForms.get_post_data_from_forms_default(forms)
+        _, valid, objects = NestedForms.persist_nested_forms_and_objs(
+            self.classmap,
+            post_data,
+            default_data=True
+        )
+
+        self.assertTrue(valid)
+        for obj in objects:
+            obj.save()
+
+        person = objects[1]  # Get the person object
+
+        # Now test with invalid classmap
+        invalid_classmap = {
+            'someone': ('tests.Person', ['first_name', 'last_name', 'email']),
+            'someone__invalid': ('tests.InvalidModel', ['field'])
+        }
+
+        with self.assertRaises(ValueError):
+            NestedForms.get_custom_form_from_instance(
+                classmap=invalid_classmap,
+                instance=person
+            )
+
     @pytest.mark.django_db
     def test_nested_form_view_get_html(cls):
         client = Client()
@@ -221,3 +309,4 @@ class TestNestedForms(TransactionTestCase):
         model_class = "tests.Person"  # Replace with your actual model class name
         url = reverse('nested-form', kwargs={'model_class': model_class})
         response = client.get(url)
+
