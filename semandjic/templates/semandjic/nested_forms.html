@@ -6,6 +6,12 @@
   {% include template_name with forms=forms only %}
   {% endwith %}
 
+  <input type="radio" name="upsert" value="justget" id="justget">
+  <label for="justget">Just Get</label>
+
+  <input type="radio" name="upsert" value="update" id="update">
+  <label for="update">Update</label>
+
   <button type="submit" class="submit-button">Submit</button>
 </form>
 
