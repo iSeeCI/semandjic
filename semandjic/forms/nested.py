@@ -44,8 +44,6 @@ class NestedForms:
             visited: Optional[Set[Type[models.Model]]] = None
     ) -> Dict[str, Tuple[str, List[str]]]:
         """Build classmap recursively using model class names"""
-        from ..utils.introspection import resolve_class_from_name
-
         visited = visited or set()
         model = resolve_class_from_name(model_class)
 
@@ -128,16 +126,7 @@ class NestedForms:
             classmap: Dict[str, Tuple[str, List[str]]],
             instance: models.Model
     ) -> Dict[str, ModelForm]:
-        """
-        Generate forms from an existing model instance using the classmap structure.
-
-        Args:
-            classmap: Dictionary mapping prefixes to (model_class, fields) tuples
-            instance: Model instance to generate forms from
-
-        Returns:
-            Dictionary mapping prefixes to instantiated ModelForms
-        """
+        """Generate forms from an existing model instance using the classmap structure."""
         logger.info("Getting custom forms from instance")
         logger.info(f"Classmap: {classmap}")
         logger.info(f"Instance: {instance}")
@@ -166,24 +155,54 @@ class NestedForms:
 
         try:
             for participant in reversed(classmap):
-                form, template_fields = cls.get_object(classmap, participant, posted_data, default_data)
+                # First try to get existing instance
+                temp_form = cls.get_custom_form_from_classmap(classmap, participant, default_data)(
+                    posted_data, prefix=participant
+                )
+
+                existing_instance = None
+                if participant != Onto.DOCUMENT:
+                    temp_instance = None
+                    if temp_form.is_valid():
+                        temp_instance = temp_form.save(commit=False)
+                    else:
+                        # Even if form is invalid (potentially due to unique constraints)
+                        # Try to create a model instance from the form data
+                        model_class = temp_form._meta.model
+                        temp_data = {field: temp_form.data.get(temp_form.add_prefix(field))
+                                     for field in temp_form.fields}
+                        temp_instance = model_class(**temp_data)
+
+                    if temp_instance:
+                        existing_instance = cls.get_existing_or_create(temp_instance, posted_data)
+
+                # Create the actual form with the instance if it exists
+                form = cls.get_custom_form_from_classmap(classmap, participant, default_data)(
+                    posted_data,
+                    prefix=participant,
+                    instance=existing_instance
+                )
                 forms[participant] = form
 
                 if not form.is_valid():
-                    logger.error(f"Form validation errors for {participant}: {form.errors}")
+                    logger.error(f"Final form validation errors for {participant}: {form.errors}")
                     is_valid = False
                     continue
 
-                instance = cls.override_unset_members(form, template_fields)
-
-                if participant != Onto.DOCUMENT:
-                    instance = cls.get_existing_or_create(instance, posted_data)
-
+                instance = form.save(commit=False)
                 cls.assign_relation_inplace(available, participant, instance)
                 available[participant] = instance
                 objects.append(instance)
 
             return forms, is_valid, objects
+
+        except Exception as e:
+            logger.error(f"Error in persist_nested_forms_and_objs: {e}", exc_info=True)
+            raise
+
+        except Exception as e:
+            logger.error(f"Error in persist_nested_forms_and_objs: {e}", exc_info=True)
+            raise
 
         except Exception as e:
             logger.error(f"Error in persist_nested_forms_and_objs: {e}", exc_info=True)
@@ -211,28 +230,6 @@ class NestedForms:
             "-".join(k.rsplit(Onto.ENTITY_UNDER_SEP, 1)): str(v) if v is not None else ""
             for k, v in entity_dict.items()
         }
-
-    @classmethod
-    def get_object(
-            cls,
-            classmap: Dict[str, Tuple[str, List[str]]],
-            participant: str,
-            posted_data: Optional[Dict[str, Any]],
-            default_data: bool
-    ) -> Tuple[ModelForm, List[str]]:
-        """Get form object and required fields with proper validation"""
-        logger.info(f"Getting form for: {participant}")
-
-        form = cls.get_custom_form_from_classmap(
-            classmap,
-            participant,
-            default_data
-        )(posted_data, prefix=participant)
-
-        _, fields = classmap[participant]
-        excluded_fields = cls.get_excluded_fields(classmap, participant)
-        required_fields = list(fields) + excluded_fields
-        return form, required_fields
 
     @classmethod
     def get_excluded_fields(
@@ -301,63 +298,38 @@ class NestedForms:
             raise AttributeError(f"Invalid path {participant} for instance {instance}")
 
     @classmethod
-    def override_unset_members(
-            cls,
-            form: ModelForm,
-            template_fields: List[str]
-    ) -> models.Model:
-        """Override unset form members with None"""
-        model_class = form.Meta.model
-        instance = form.save(commit=False)
-
-        for field in model_class._meta.get_fields():
-            if (
-                    field.name not in template_fields
-                    and field.concrete
-                    and not field.is_relation
-                    and not any(x in field.model.__name__.lower() for x in ["auditedmodel"])
-            ):
-                setattr(instance, field.name, None)
-
-        return instance
-
-    @classmethod
     def get_existing_or_create(
             cls,
             instance: models.Model,
             posted_data: Optional[Dict[str, Any]]
-    ) -> models.Model:
+    ) -> Optional[models.Model]:
         """Get existing instance or create new one with proper error handling"""
         var_dict = clean_model_dict(instance)
         search_fields = get_model_unique_fields(instance.__class__)
         search_dict = {k: v for k, v in var_dict.items() if k in search_fields}
 
-        should_update = (
-                posted_data
-                and "upsert" in posted_data
-                and posted_data["upsert"] != "justget"
-        )
-
         try:
             if search_dict:
-                queryset = instance.__class__.objects.filter(**search_dict)
-                if should_update:
-                    existing_defaults = {
-                        k: v for k, v in var_dict.items()
-                        if k in (f.name for f in instance.__class__._meta.fields)
-                    }
-                    queryset.update(**existing_defaults)
-                instance = queryset.get()
-            else:
-                logger.error(f"No search dict. Always creating.")
-                instance = instance.__class__(**var_dict)
+                try:
+                    existing = instance.__class__.objects.get(**search_dict)
+                    if posted_data and "upsert" in posted_data and posted_data["upsert"] != "justget":
+                        # Update existing instance with new values
+                        for field_name, value in var_dict.items():
+                            if field_name in (f.name for f in instance.__class__._meta.fields):
+                                setattr(existing, field_name, value)
+                    return existing
+                except ObjectDoesNotExist:
+                    if posted_data and "upsert" in posted_data:
+                        return None
+                    return instance
 
+            # If no unique fields or all values are None
+            if posted_data and "upsert" in posted_data:
+                return None
             return instance
-        except ObjectDoesNotExist as e:
-            logger.error(f"Error in get_existing_or_create: {e}")
-            return instance.__class__(**var_dict)
+
         except Exception as e:
-            logger.error(f"Error in get_existing_or_create: {e}")
+            logger.error(f"Error in get_existing_or_create: {e}", exc_info=True)
             raise
 
     @classmethod
@@ -373,7 +345,6 @@ class NestedForms:
             for field_name, field in form.fields.items()
         })
         return post_data
-
 
     @classmethod
     def build_form_tree(
